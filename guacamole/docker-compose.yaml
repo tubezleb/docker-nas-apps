@@ -1,0 +1,43 @@
+---
+version: "2.1"
+services:  
+  guacdb:
+    container_name: guacdb
+    image: mariadb/server:latest
+    restart: unless-stopped
+    environment:
+      - MYSQL_ROOT_PASSWORD=
+      - MYSQL_DATABASE=guacamole_db
+      - MYSQL_USER=guacamole_user
+      - MYSQL_PASSWORD=
+      - PUID=1000
+      - PGID=100
+      - TZ=America/Montreal
+    volumes:
+      - ${DOCKER_FOLDER}/guacamole/bd:/var/lib/mysql
+
+  guacd:
+    container_name: guacd
+    image: guacamole/guacd
+    restart: unless-stopped
+
+  guacamole:
+    container_name: guacamole
+    image: 'guacamole/guacamole:latest'
+    restart: unless-stopped
+    ports:
+      - 8081:8080
+    environment:
+      - GUACD_HOSTNAME=guacd
+      - MYSQL_HOSTNAME=guacdb
+      - MYSQL_DATABASE=guacamole_db
+      - MYSQL_USER=guacamole_user
+      - MYSQL_PASSWORD=
+      - OPENID_AUTHORIZATION_ENDPOINT=https://authelia.domain.com/api/oidc/authorization?state=1234abcedfdhf
+      - OPENID_JWKS_ENDPOINT=https://authelia.domain.com/jwks.json
+      - OPENID_ISSUER=https://authelia.domain.com
+      - OPENID_CLIENT_ID=guacamole
+      - OPENID_REDIRECT_URI=https://guac.domain.com/guacamole
+    depends_on:
+      - guacdb
+      - guacd
