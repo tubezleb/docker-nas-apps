@@ -69,7 +69,6 @@ services:
       - ${CONTAINERS_DATAS}/sonarr/config:/config
       - ${TORRENTS}/completed:/torrentcompleted
       - ${SHOWS_FOLDER}:/tvshows
-      - ${TORRENTS_SEED}:/seed
     ports:
       - 8989:8989
     depends_on:
