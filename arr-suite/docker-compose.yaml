@@ -12,7 +12,6 @@ services:
     devices:
     - /dev/dri:/dev/dri
     volumes:
-      - ${CONTAINERS_DATAS}/swag/config/etc/letsencrypt/live:/certs
       - ${CONTAINERS_DATAS}/plex/config:/config
       - ${MOVIES_FOLDER}:/movies:ro
       - ${SHOWS_FOLDER}:/tvshows:ro
