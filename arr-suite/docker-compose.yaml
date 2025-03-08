@@ -1,59 +1,67 @@
----
-version: "2.1"
 services:
+  plex:
+    image: lscr.io/linuxserver/plex
+    container_name: plex
+    network_mode: host
+    environment:
+      - TZ=America/Montreal
+      - PUID=1000
+      - PGID=100
+      - VERSION=docker
+      - PLEX_CLAIM=
+    devices:
+    - /dev/dri:/dev/dri
+    volumes:
+      - ${CONTAINERS_DATAS}/swag/config/etc/letsencrypt/live:/certs
+      - ${CONTAINERS_DATAS}/plex/config:/config
+      - ${MOVIES_FOLDER}:/movies:ro
+      - ${SHOWS_FOLDER}:/tvshows:ro
+    restart: always
+
   transmission-openvpn:
     image: haugene/transmission-openvpn
-    container_name: transmission
+    container_name: transmission-openvpn
     cap_add:
       - NET_ADMIN
     environment:
       - PUID=1000
       - PGID=100
       - TZ=America/Montreal
-      - OPENVPN_PROVIDER=PIA
-      - OPENVPN_USERNAME=${OPENVPN_USERNAME}
-      - OPENVPN_PASSWORD=${OPENVPN_PASSWORD}
+      - OPENVPN_PROVIDER=
+      - OPENVPN_USERNAME=
+      - OPENVPN_PASSWORD=
       - OPENVPN_CONFIG=ca_montreal,ca_ontario,ca_toronto
       - OPENVPN_OPTS=--inactive 3600 --ping 10 --ping-exit 60
       - LOCAL_NETWORK=192.168.2.0/24
       - TRANSMISSION_DOWNLOAD_DIR=/completed
-      - TRANSMISSION_INCOMPLETE_DIR=/incomplete
       - TRANSMISSION_WATCH_DIR=/watch
-      - TRANSMISSION_RPC_USERNAME=${TRANSMISSION_RPC_USERNAME}
-      - TRANSMISSION_RPC_PASSWORD=${TRANSMISSION_RPC_PASSWORD}
+      - TRANSMISSION_RPC_USERNAME=
+      - TRANSMISSION_RPC_PASSWORD=
       - TRANSMISSION_RPC_AUTHENTICATION_REQUIRED=true
       - TRANSMISSION_PORT_FORWARDING_ENABLED=true
-      - TRANSMISSION_SPEED_LIMIT_UP=2000
+      - TRANSMISSION_SPEED_LIMIT_UP=10000
       - TRANSMISSION_SPEED_LIMIT_UP_ENABLED=true
+      - TRANSMISSION_SCRIPT_TORRENT_DONE_ENABLED=true
       - ENABLE_UFW=true
       - UFW_ALLOW_GW_NET=true
+      - WEBPROXY_ENABLED=true
+      - WEBPROXY_PORT=8888
     volumes:
-      - ${DOCKER_FOLDER}/transmission/data:/data
-      - ${TORRENT_COMPLETED_FOLDER}:/completed
-      - ${TORRENT_INCOMPLETE_FOLDER}:/incomplete
-      - ${TORRENT_WATCH_FOLDER}:/watch
+      - ${CONTAINERS_DATAS}/transmission/config:/config
+      - ${TORRENTS}/completed:/completed
+      - ${TORRENTS}/incomplete:/incomplete
+      - ${TORRENTS}/watch:/watch
+    devices:
+      - /dev/net/tun
     logging:
       driver: json-file
       options:
         max-size: 10m
     ports:
       - 9091:9091
+      - 8888:8888
     restart: always
-    
-  plex:
-    image: lscr.io/linuxserver/plex
-    container_name: plex
-    environment:
-      - PUID=1000
-      - PGID=100
-      - VERSION=docker
-    ports:
-      - 32400:32400
-    volumes:
-      - ${DOCKER_FOLDER}/plex/config:/config
-      - ${MOVIES_FOLDER}:/movies
-      - ${TV_SHOWS_FOLDER}:/tvshows
-    
+
   sonarr:
     image: lscr.io/linuxserver/sonarr
     container_name: sonarr
@@ -62,13 +70,17 @@ services:
       - PGID=100
       - TZ=Amercia/Montreal
     volumes:
-      - ${DOCKER_FOLDER}/sonarr/config:/config
-      - ${TORRENT_COMPLETED_FOLDER}:/torrentcompleted
-      - ${TV_SHOWS_FOLDER}:/tvshows
+      - ${CONTAINERS_DATAS}/sonarr/config:/config
+      - ${TORRENTS}/completed:/torrentcompleted
+      - ${SHOWS_FOLDER}:/tvshows
+      - ${TORRENTS_SEED}:/seed
     ports:
       - 8989:8989
+    depends_on:
+      - prowlarr
+      - transmission-openvpn
     restart: always
-    
+
   radarr:
     image: lscr.io/linuxserver/radarr
     container_name: radarr
@@ -77,41 +89,48 @@ services:
       - PGID=100
       - TZ=America/Montreal
     volumes:
-      - ${DOCKER_FOLDER}/radarr/config:/config
-      - ${TORRENT_COMPLETED_FOLDER}:/torrentcompleted
+      - ${CONTAINERS_DATAS}/radarr/config:/config
+      - ${TORRENTS}/completed:/torrentcompleted
       - ${MOVIES_FOLDER}:/movies
     ports:
       - 7878:7878
+    depends_on:
+      - prowlarr
+      - transmission-openvpn
     restart: always
 
   prowlarr:
-    image: lscr.io/linuxserver/prowlarr:develop
+    image: lscr.io/linuxserver/prowlarr:latest
     container_name: prowlarr
     environment:
       - PUID=1000
       - PGID=100
       - TZ=America/Montreal
     volumes:
-      - ${DOCKER_FOLDER}/prowlarr/config:/config
+      - ${CONTAINERS_DATAS}/prowlarr/config:/config
     ports:
       - 9696:9696
-    restart: unless-stopped
-    
+    depends_on:
+      - flaresolverr
+      - transmission-openvpn
+    restart: always
+
   flaresolverr:
     # DockerHub mirror flaresolverr/flaresolverr:latest
-    image: ghcr.io/flaresolverr/flaresolverr:latest
+    #image: ghcr.io/flaresolverr/flaresolverr:latest
+    #image: ghcr.io/flaresolverr/flaresolverr:pr-1282
+    #image: 21hsmw/flaresolverr:nodriver
+    image: alexfozor/flaresolverr:pr-1300-experimental
     container_name: flaresolverr
     environment:
       - PUID=1000
       - PGID=100
-      - LOG_LEVEL=${LOG_LEVEL:-info}
-      - LOG_HTML=${LOG_HTML:-false}
-      - CAPTCHA_SOLVER=${CAPTCHA_SOLVER:-none}
+      - LOG_LEVEL=info
       - TZ=America/Montreal
     ports:
-      - "${PORT:-8191}:8191"
+      - 8191
     restart: always
-    
+
   bazarr:
     image: lscr.io/linuxserver/bazarr:latest
     container_name: bazarr
@@ -120,9 +139,35 @@ services:
       - PGID=100
       - TZ=America/Montreal
     volumes:
-      - ${DOCKER_FOLDER}/bazarr/config:/config
+      - ${CONTAINERS_DATAS}/bazarr/config:/config
       - ${MOVIES_FOLDER}:/movies
-      - ${TV_SHOWS_FOLDER}:/tvshows
+      - ${SHOWS_FOLDER}:/tvshows
     ports:
      - 6767:6767
-    restart: unless-stopped
+    restart: always
+
+  overseerr:
+    image: sctx/overseerr:latest
+    container_name: overseerr
+    environment:
+      - LOG_LEVEL=debug
+      - TZ=America/Montreal
+      - PORT=5055
+    ports:
+      - 5055:5055
+    volumes:
+      - ${CONTAINERS_DATAS}/overseerr/appdata/config:/app/config
+    restart: always
+
+  tautulli:
+    image: lscr.io/linuxserver/tautulli:latest
+    container_name: tautulli
+    environment:
+      - PUID=1000
+      - PGID=100
+      - TZ=America/Montreal
+    volumes:
+      - ${CONTAINERS_DATAS}/tautulli:/config
+    ports:
+      - 8181:8181
+    restart: always
